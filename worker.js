@@ -5,15 +5,15 @@
  */
 
 const CONFIG = {
-    name: "博客世界",
-    desc: "人生如戏",
-    url: "https://blog.888021.xyz", 
-    pageSize: 6,
-    bannerUrl: "https://jhtvm.eu.org/rest/QaAsSbk.webp",
-    favicon: "https://jhtvm.eu.org/rest/QaAsSbk.webp",
-    // --- Cloudflare Turnstile ---
-    turnstileSiteKey: "0x4AAAAAACFUfK5jTHL7PcEK",     
-    turnstileSecretKey: "0x4AAAAAACFUfEDyJBvtt_IMRMo297eln_0", 
+    name: "博客世界",                    // 站点标题
+    desc: "人生如戏",                    // 副标题 / SEO Description
+    url: "https://your-domain.com",     // 博客主域名
+    pageSize: 6,                        // 分页展示条数
+    bannerUrl: "https://.../banner.webp",// 顶部背景图
+    favicon: "https://.../favicon.webp", // Favicon 链接
+    // Cloudflare Turnstile 验证配置（可选，不配置则跳过人机验证）
+    turnstileSiteKey: "0x4AAAAAA...",     
+    turnstileSecretKey: "0x4AAAAAA...",
 };
 
 // --- 辅助函数 ---
