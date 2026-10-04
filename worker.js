@@ -93,7 +93,7 @@ function safeFileName(name) {
 }
 
 // --- 站点设置（存 R2，可在后台修改，覆盖 CONFIG 中的默认值） ---
-const SETTING_KEYS = ['name', 'desc', 'url', 'bannerUrl', 'favicon', 'pageSize', 'googleVerify'];
+const SETTING_KEYS = ['name', 'desc', 'url', 'bannerUrl', 'favicon', 'pageSize', 'googleVerify', 'turnstileSiteKey', 'turnstileSecretKey'];
 
 async function loadSettings(env) {
     try {
@@ -554,6 +554,9 @@ export default {
         try { config = await (await env.BLOG_BUCKET.get('sys/config.json')).json(); } catch (e) { }
         // 站点设置覆盖 CONFIG 默认值（在渲染任何页面前应用）
         applySettings(await loadSettings(env));
+        // 若用 `wrangler secret put TURNSTILE_SECRET_KEY` 注入了密钥，它的优先级最高：
+        // 密钥不落盘、不出现在 R2 里，比存 sys/settings.json 更安全。
+        if (env.TURNSTILE_SECRET_KEY) CONFIG.turnstileSecretKey = env.TURNSTILE_SECRET_KEY;
 
         // 1. 初始化检查
         if (!config && path !== '/api/install' && !path.startsWith('/images/')) {
@@ -1150,6 +1153,10 @@ export default {
             const media = await loadAllMedia(env);
             const saved = (await loadSettings(env)) || {};
             const val = (k) => esc(saved[k] !== undefined ? saved[k] : CONFIG[k]);
+            // 密钥一律不回显到页面上，只用「是否已配置」驱动界面
+            const hasSecret = !!(saved.turnstileSecretKey || CONFIG.turnstileSecretKey);
+            const tsOn = turnstileEnabled();
+            const tsFromEnv = !!env.TURNSTILE_SECRET_KEY;
 
             return response.html(html('站点设置', `
                 ${adminNav('settings', { posts: posts.length, comments: comments.length, media: media.length })}
@@ -1187,7 +1194,7 @@ export default {
                                 <span class="field-hint">同时用作首页横幅与登录页背景。</span>
                             </div>
                             <div class="field">
-                                <label class="field-label" for="s-favicon">网站图标 URL</label>
+                                <label class="field-label" for="s-favicon">Favicon URL</label>
                                 <input id="s-favicon" class="input" value="${val('favicon')}" placeholder="https://…/favicon.webp">
                             </div>
                             <div class="field">
@@ -1199,12 +1206,39 @@ export default {
                     </div>
                 </div>
 
-                <div class="card" style="margin-top:20px">
-                    <div class="card-body">
-                        <div class="section-head">
-                            <div class="section-title"><i class="fa-solid fa-key"></i> 修改管理员密码</div>
+                <div class="split-even" style="margin-top:20px">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="section-head">
+                                <div class="section-title"><i class="fa-solid fa-shield-halved"></i> 人机验证（Turnstile）</div>
+                                <span class="badge ${tsOn ? 'badge-cat' : ''}">${tsOn ? '已启用' : '未启用'}</span>
+                            </div>
+                            ${tsFromEnv ? `<p class="field-hint" style="margin:0 0 14px"><i class="fa-solid fa-circle-info"></i> Secret Key 来自 Worker 环境变量，此处填写无效，需在 Cloudflare 后台修改。</p>` : ''}
+                            <div class="field">
+                                <label class="field-label" for="s-turnstileSiteKey">Site Key（站点密钥）</label>
+                                <input id="s-turnstileSiteKey" class="input" value="${val('turnstileSiteKey')}" placeholder="0x4AAAAAAA…" spellcheck="false">
+                                <span class="field-hint">站点密钥会公开出现在登录页，属于可公开的值。</span>
+                            </div>
+                            <div class="field">
+                                <label class="field-label" for="s-turnstileSecretKey">Secret Key（私密密钥）</label>
+                                <div style="display:flex;gap:8px">
+                                    <input id="s-turnstileSecretKey" class="input" type="password" autocomplete="new-password" spellcheck="false"
+                                        placeholder="${hasSecret ? '已配置 · 留空表示不修改' : '尚未配置'}" ${tsFromEnv ? 'disabled' : ''}>
+                                    ${hasSecret && !tsFromEnv ? '<button type="button" class="btn btn-ghost btn-sm" id="clear-ts" style="flex:0 0 auto">清除</button>' : ''}
+                                </div>
+                                <span class="field-hint" id="ts-hint">出于安全考虑，已保存的密钥不会回显到页面上。</span>
+                            </div>
+                            <p class="field-hint" style="margin:0">
+                                <i class="fa-solid fa-circle-info"></i>
+                                两项都填且格式正确才会启用；只填一项不生效。密钥在 Cloudflare 控制台 → <strong>Turnstile</strong> → 添加站点后获取。
+                            </p>
                         </div>
-                        <div class="split-even">
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="section-head">
+                                <div class="section-title"><i class="fa-solid fa-key"></i> 修改管理员密码</div>
+                            </div>
                             <div class="field">
                                 <label class="field-label" for="pw-cur">当前密码</label>
                                 <input id="pw-cur" class="input" type="password" autocomplete="current-password">
@@ -1213,27 +1247,57 @@ export default {
                                 <label class="field-label" for="pw-new">新密码（至少 6 位）</label>
                                 <input id="pw-new" class="input" type="password" autocomplete="new-password">
                             </div>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-                            <span class="field-hint">修改成功后所有设备都需要重新登录。</span>
-                            <button class="btn" id="save-pw"><i class="fa-solid fa-shield-halved"></i> 更新密码</button>
+                            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+                                <span class="field-hint">修改成功后所有设备都需要重新登录。</span>
+                                <button class="btn" id="save-pw"><i class="fa-solid fa-shield-halved"></i> 更新密码</button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <script>
+                    let clearSecret = false;
+                    const clearBtn = $('#clear-ts');
+                    if (clearBtn) clearBtn.addEventListener('click', () => {
+                        clearSecret = !clearSecret;
+                        const inp = $('#s-turnstileSecretKey');
+                        inp.disabled = clearSecret;
+                        inp.value = '';
+                        clearBtn.textContent = clearSecret ? '撤销' : '清除';
+                        clearBtn.classList.toggle('btn-danger', clearSecret);
+                        clearBtn.classList.toggle('btn-ghost', !clearSecret);
+                        $('#ts-hint').textContent = clearSecret
+                            ? '保存后将清除已存储的 Secret Key，人机验证会被关闭。'
+                            : '出于安全考虑，已保存的密钥不会回显到页面上。';
+                    });
+
                     $('#save-settings').addEventListener('click', async function () {
                         const btn = this;
-                        btn.disabled = true;
                         const payload = {};
-                        ['name', 'desc', 'url', 'bannerUrl', 'favicon', 'googleVerify', 'pageSize'].forEach(k => {
+                        ['name', 'desc', 'url', 'bannerUrl', 'favicon', 'googleVerify', 'pageSize', 'turnstileSiteKey'].forEach(k => {
                             const el = $('#s-' + k);
-                            if (el) payload[k] = el.value.trim();
+                            if (el && !el.disabled) payload[k] = el.value.trim();
                         });
+
+                        // Secret Key 只在用户真的输入了、或点了「清除」时才提交；留空表示保持原值，
+                        // 这样既不会把密钥回显到页面上，也不会因为留空而误删已配置的密钥。
+                        const secretEl = $('#s-turnstileSecretKey');
+                        const typedSecret = (secretEl && !secretEl.disabled) ? secretEl.value.trim() : '';
+                        if (clearSecret) payload.turnstileSecretKey = '';
+                        else if (typedSecret) payload.turnstileSecretKey = typedSecret;
+
+                        // 提前拦一下占位符：历史上正是因为 "0x4AAAAAA..." 被当成真密钥，导致登录页异常
+                        const siteKey = payload.turnstileSiteKey || '';
+                        if (siteKey && !/^0x[A-Za-z0-9_-]{20,}$/.test(siteKey)) {
+                            const go = await uiConfirm('它看起来不是有效的 Site Key（真实密钥以 0x 开头、不含省略号）。保存后不会启用人机验证，也不会影响登录。', { title: 'Site Key 格式可疑', okText: '仍然保存', danger: false });
+                            if (!go) return;
+                        }
+
+                        btn.disabled = true;
                         try {
                             const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                            if (r.ok) { toast('设置已保存', 'ok'); setTimeout(() => location.reload(), 700); }
-                            else toast('保存失败', 'err');
+                            if (r.ok) { toast('设置已保存', 'ok'); setTimeout(() => location.reload(), 700); return; }
+                            toast('保存失败', 'err');
                         } catch (e) { toast('网络错误', 'err'); }
                         btn.disabled = false;
                     });
