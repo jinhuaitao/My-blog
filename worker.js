@@ -1202,12 +1202,12 @@ export default {
                         <div class="card-body">
                             <div class="section-head"><div class="section-title"><i class="fa-solid fa-image"></i> 外观与图标</div></div>
                             <div class="field">
-                                <label class="field-label" for="s-bannerUrl">顶部背景图 URL</label>
+                                <label class="field-label" for="s-bannerUrl">顶部背景图</label>
                                 <input id="s-bannerUrl" class="input" value="${val('bannerUrl')}" placeholder="https://…/banner.webp">
                                 <span class="field-hint">同时用作首页横幅与登录页背景。</span>
                             </div>
                             <div class="field">
-                                <label class="field-label" for="s-favicon">网站图标 URL</label>
+                                <label class="field-label" for="s-favicon">网站图标</label>
                                 <input id="s-favicon" class="input" value="${val('favicon')}" placeholder="https://…/favicon.webp">
                             </div>
                             <div class="field">
