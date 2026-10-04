@@ -1,0 +1,14 @@
+{
+  "name": "my-blog",
+  "version": "13.25.0",
+  "private": true,
+  "description": "基于 Cloudflare Workers + R2 的无服务器博客",
+  "scripts": {
+    "deploy": "npx wrangler r2 bucket create blog-bucket; npx wrangler deploy",
+    "deploy:prod": "npx wrangler r2 bucket create blog-bucket; npx wrangler deploy",
+    "dev": "npx wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.68.0"
+  }
+}

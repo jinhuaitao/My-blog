@@ -1,0 +1,25 @@
+{
+  // Worker 名称：部署后在 Cloudflare 控制台显示的名字，可自行修改
+  "name": "my-blog",
+
+  // 入口文件（本项目的单文件 Worker）
+  "main": "worker.js",
+
+  // 兼容日期：建议保持为创建配置当天的日期
+  "compatibility_date": "2026-10-04",
+
+  // 开启可观测性（控制台里能看到请求日志/指标）
+  "observability": {
+    "enabled": true
+  },
+
+  // ==== 关键：R2 存储桶绑定 ====
+  // binding 必须叫 BLOG_BUCKET，与 worker.js 中 env.BLOG_BUCKET 完全一致（大小写敏感）
+  // bucket_name 是桶名，必须是账户内唯一；构建/部署阶段会按此名自动创建
+  "r2_buckets": [
+    {
+      "binding": "BLOG_BUCKET",
+      "bucket_name": "blog-bucket"
+    }
+  ]
+}
