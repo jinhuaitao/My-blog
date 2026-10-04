@@ -11,9 +11,13 @@ const CONFIG = {
     pageSize: 6,                        // 分页展示条数
     bannerUrl: "https://.../banner.webp",// 顶部背景图
     favicon: "https://.../favicon.webp", // Favicon 链接
-    // Cloudflare Turnstile 验证配置（可选，不配置则跳过人机验证）
-    turnstileSiteKey: "0x4AAAAAA...",     
-    turnstileSecretKey: "0x4AAAAAA...",
+    // Cloudflare Turnstile 人机验证配置（可选）
+    // 留空 = 关闭人机验证，登录页不会加载 Turnstile，也不会校验 token。
+    // 需要开启时，填入 Cloudflare 控制台 Turnstile 里真实的 Site Key / Secret Key。
+    // 注意：不要保留 "0x4AAAAAA..." 这类占位符——它会被误判为“已开启”，
+    //      导致登录页渲染出无效的验证组件，从而出现“点登录没反应”的问题。
+    turnstileSiteKey: "",
+    turnstileSecretKey: "",
 };
 
 // --- 辅助函数 ---
@@ -45,6 +49,14 @@ async function verifyTurnstile(token, secret, ip) {
         const json = await result.json();
         return json.success;
     } catch (e) { return false; }
+}
+
+// 判断 Turnstile 是否「真正」配置完成。
+// 只有形如 0x 开头、且长度足够的真实密钥才算开启；占位符 "0x4AAAAAA..." 含点号，
+// 会被判定为未配置 → 跳过人机验证。这一层校验同时用于服务端与前端渲染。
+function turnstileEnabled() {
+    const isRealKey = (k) => typeof k === 'string' && /^0x[A-Za-z0-9_-]{20,}$/.test(k);
+    return isRealKey(CONFIG.turnstileSiteKey) && isRealKey(CONFIG.turnstileSecretKey);
 }
 
 // --- 静态资源管理 (CSS/JS) ---
@@ -219,7 +231,7 @@ export default {
         if (path === '/api/login') {
             const b = await req.json();
             const ip = req.headers.get('CF-Connecting-IP');
-            if (CONFIG.turnstileSecretKey && CONFIG.turnstileSiteKey) {
+            if (turnstileEnabled()) {
                 if (!(await verifyTurnstile(b.turnstileToken, CONFIG.turnstileSecretKey, ip))) return response.error('Captcha Failed', 403);
             }
             if (b.u === config.username && await hash(b.p) === config.passwordHash) {
@@ -304,7 +316,7 @@ export default {
         // 1. 管理后台
         if (path === '/admin') {
             if (user) return response.redirect('/admin/dashboard');
-            const hasTurnstile = CONFIG.turnstileSiteKey && CONFIG.turnstileSiteKey.length > 5;
+            const hasTurnstile = turnstileEnabled();
             return response.html(html('后台登录', `
               <div class="login-card">
                   <div class="login-header"><div class="login-icon"><i class="fa-solid fa-user-shield"></i></div><h2 class="login-title">管理员登录</h2><p class="login-subtitle">欢迎回来，请验证身份以继续</p></div>
@@ -312,10 +324,36 @@ export default {
                       <div class="input-group-modern"><input id="u" placeholder="用户名" required autocomplete="username"><i class="fa-solid fa-user"></i></div>
                       <div class="input-group-modern"><input id="p" type="password" placeholder="密码" required autocomplete="current-password"><i class="fa-solid fa-lock"></i></div>
                       ${hasTurnstile ? `<div style="display:flex;justify-content:center;margin-bottom:20px;min-height:65px;"><div class="cf-turnstile" data-sitekey="${CONFIG.turnstileSiteKey}"></div></div>` : ''}
-                      <button class="btn btn-login">立即登录 <i class="fa-solid fa-arrow-right" style="margin-left:5px"></i></button>
+                      <button type="submit" id="login-btn" class="btn btn-login">立即登录 <i class="fa-solid fa-arrow-right" style="margin-left:5px"></i></button>
                   </form>
               </div>
-              <script>async function login(){const u=$('#u').value,p=$('#p').value;let t='';if(document.querySelector('.cf-turnstile')){t=turnstile.getResponse();if(!t)return toast('请先完成人机验证');}const btn=document.querySelector('.btn-login');btn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> 验证中...';try{const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({u,p,turnstileToken:t})});if(res.ok){toast('登录成功');setTimeout(()=>location.href='/admin/dashboard',500);}else{toast('登录失败');if(typeof turnstile!=='undefined')turnstile.reset();btn.innerHTML='立即登录';}}catch(e){toast('网络错误');btn.innerHTML='立即登录';}}</script>`, null, { useTurnstile: hasTurnstile, page: 'login' }));
+              <script>
+                async function login() {
+                    const btn = $('#login-btn');
+                    const u = $('#u').value.trim(), p = $('#p').value;
+                    if (!u || !p) return toast('请输入用户名和密码');
+                    let t = '';
+                    const tsBox = $('.cf-turnstile');
+                    if (tsBox) {
+                        if (typeof turnstile === 'undefined') return toast('人机验证组件尚未加载完成，请稍后重试');
+                        t = turnstile.getResponse();
+                        if (!t) return toast('请先完成人机验证');
+                    }
+                    const rawHtml = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> 验证中...';
+                    try {
+                        const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ u, p, turnstileToken: t }) });
+                        if (res.ok) { toast('登录成功'); setTimeout(() => location.href = '/admin/dashboard', 500); return; }
+                        toast(res.status === 403 ? '人机验证未通过，请重试' : '用户名或密码错误');
+                        if (tsBox && typeof turnstile !== 'undefined') turnstile.reset();
+                    } catch (e) {
+                        toast('网络错误：' + (e && e.message ? e.message : '请检查网络连接'));
+                    }
+                    btn.disabled = false;
+                    btn.innerHTML = rawHtml;
+                }
+              </script>`, null, { useTurnstile: hasTurnstile, page: 'login' }));
         }
 
         if (path === '/admin/dashboard' && user) {

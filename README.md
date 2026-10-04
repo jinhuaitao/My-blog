@@ -153,3 +153,17 @@ const CONFIG = {
 
 **Q：改了 `wrangler.jsonc` 后没生效？**
 构建设置的修改只对**下一次构建**生效，重新推送一次提交或点「重试构建」。
+
+**Q：填好账号密码后，点「立即登录」完全没反应（页面不动、也不报错）？**
+这是**Turnstile 占位符**导致的。`worker.js` 里原本写着 `turnstileSiteKey: "0x4AAAAAA..."`，判断条件是 `length > 5`，于是这个假密钥被当成了「已开启」，登录页会去渲染一个非法的验证组件；Cloudflare 的 `api.js` 因为 sitekey 非法无法初始化，点击时 `turnstile.getResponse()` 直接抛 `ReferenceError: turnstile is not defined`，函数中途中断，请求根本没发出去。
+
+修复方式（已内置）：
+
+- `CONFIG.turnstileSiteKey` / `turnstileSecretKey` 默认留空；
+- 新增 `turnstileEnabled()`，用正则 `/^0x[A-Za-z0-9_-]{20,}$/` 判断密钥是否为**真实**密钥，占位符一律视为未开启；
+- 前端 `login()` 增加 `typeof turnstile === 'undefined'` 守卫，失败时恢复按钮状态并给出明确提示。
+
+要真正启用 Turnstile：到 Cloudflare 控制台 → `Turnstile` → 添加站点，把拿到的 Site Key / Secret Key 填进 `CONFIG`（Secret Key 建议用 `wrangler secret put TURNSTILE_SECRET` 注入）。
+
+**Q：控制台（F12）看到 `Invalid input for parameter "sitekey"`？**
+同上，说明填的是占位符而不是真实密钥。
