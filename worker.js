@@ -338,6 +338,17 @@ const STYLES = `
     .split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; align-items: start; }
     .split-even { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
 
+    /* --- 设置页：2×2 四宫格，四张卡片等宽等高 ---
+       grid-auto-rows: 1fr 让所有行等分高度，align-items: stretch 让卡片撑满单元格，
+       两者叠加后四个模块尺寸完全一致（内容较少的一侧会留白，属预期效果）。 */
+    .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 20px; align-items: stretch; }
+    .settings-grid > .card { display: flex; }
+    .settings-grid > .card > .card-body { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+    /* 铺开后最后一项不再需要下边距，否则底部会多出一截 */
+    .settings-grid > .card > .card-body > .field:last-child { margin-bottom: 0; }
+    /* 把动作行（如「更新密码」按钮）压到卡片底部，避免留白显得突兀 */
+    .settings-grid .push-bottom { margin-top: auto; }
+
     /* --- 提示条 --- */
     .toast { display: flex; align-items: center; gap: 10px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); font-size: .9rem; padding: 13px 18px; max-width: min(90vw, 400px); }
     .toast i { font-size: 1rem; color: var(--primary); flex-shrink: 0; }
@@ -359,6 +370,8 @@ const STYLES = `
 
     @media(max-width: 900px) {
         .split, .split-even { grid-template-columns: 1fr; }
+        /* 单列时取消等高，否则每张卡片都会被拉到最高那张的高度 */
+        .settings-grid { grid-template-columns: 1fr; grid-auto-rows: auto; }
         .page-title { font-size: 1.35rem; }
         .admin-nav { gap: 4px; }
         .admin-nav-item { padding: 8px 12px; font-size: .85rem; }
@@ -1162,7 +1175,7 @@ export default {
                 ${adminNav('settings', { posts: posts.length, comments: comments.length, media: media.length })}
                 ${pageHead('站点设置', '这些设置保存在 R2 中，保存后立即对全站生效。',
                     '<button class="btn" id="save-settings"><i class="fa-solid fa-floppy-disk"></i> 保存设置</button>')}
-                <div class="split-even">
+                <div class="settings-grid">
                     <div class="card">
                         <div class="card-body">
                             <div class="section-head"><div class="section-title"><i class="fa-solid fa-globe"></i> 基础信息</div></div>
@@ -1194,7 +1207,7 @@ export default {
                                 <span class="field-hint">同时用作首页横幅与登录页背景。</span>
                             </div>
                             <div class="field">
-                                <label class="field-label" for="s-favicon">Favicon URL</label>
+                                <label class="field-label" for="s-favicon">网站图标 URL</label>
                                 <input id="s-favicon" class="input" value="${val('favicon')}" placeholder="https://…/favicon.webp">
                             </div>
                             <div class="field">
@@ -1204,9 +1217,7 @@ export default {
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="split-even" style="margin-top:20px">
                     <div class="card">
                         <div class="card-body">
                             <div class="section-head">
@@ -1247,7 +1258,7 @@ export default {
                                 <label class="field-label" for="pw-new">新密码（至少 6 位）</label>
                                 <input id="pw-new" class="input" type="password" autocomplete="new-password">
                             </div>
-                            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+                            <div class="push-bottom" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
                                 <span class="field-hint">修改成功后所有设备都需要重新登录。</span>
                                 <button class="btn" id="save-pw"><i class="fa-solid fa-shield-halved"></i> 更新密码</button>
                             </div>
