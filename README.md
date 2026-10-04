@@ -119,24 +119,48 @@ npm run deploy        # 等价于：先建桶，再部署
 
 ---
 
+## 🛠 后台管理
+
+登录后访问 `/admin/dashboard`，顶部有统一的五个入口：
+
+| 页面 | 路径 | 能做什么 |
+| --- | --- | --- |
+| 概览 | `/admin/dashboard` | 文章 / 评论 / 总阅读 / 图片 四项指标，最近文章、阅读排行 |
+| 文章 | `/admin/posts` | 按标题正文标签搜索、按分类筛选、分页、置顶切换、单篇删除、批量删除 |
+| 评论 | `/admin/comments` | 按文章分组查看全部评论，删除单条或清空某篇的全部评论 |
+| 媒体 | `/admin/media` | 上传（点击或拖拽，支持多选）、按文件名筛选、批量复制链接、批量删除 |
+| 设置 | `/admin/settings` | 站点名称/副标题/域名/背景图/Favicon/每页条数/Google 验证码，以及修改管理员密码 |
+
+写作入口是 `/admin/edit`，支持 Markdown 实时预览、工具栏、字数统计、未保存提示、本地草稿自动保存、拖拽与粘贴上传图片、全屏专注模式，快捷键 `Ctrl/⌘+S` 保存、`Ctrl/⌘+B` 加粗、`Ctrl/⌘+I` 斜体、`Ctrl/⌘+K` 链接。
+
+### 两个安全约定
+
+- **输出转义**：文章标题、分类、标签、评论昵称与内容在拼接进页面前都会经过 `esc()`，标题里写 `<script>` 不会被执行。
+- **R2 键名安全化**：文章别名与上传文件名会经 `safeKey()` / `safeFileName()` 处理，去掉路径分隔符，避免写出目录结构或覆盖 `sys/` 下的系统文件。
+
+---
+
 ## 🧩 站点信息配置
 
-站点标题、副标题、域名、背景图、Favicon、Turnstile 人机验证密钥等，都在 `worker.js` 顶部的 `CONFIG` 对象中：
+**推荐在后台「设置」页里改**，改完立即生效，无需重新部署（配置存在 R2 的 `sys/settings.json`）。
+
+也可以改 `worker.js` 顶部的 `CONFIG` 作为默认值：
 
 ```js
 const CONFIG = {
     name: "博客世界",
     desc: "人生如戏",
     url: "https://your-domain.com",
-    pageSize: 6,
+    pageSize: 6,          // 首页每页文章数
     bannerUrl: "https://.../banner.webp",
     favicon: "https://.../favicon.webp",
-    turnstileSiteKey: "",     // 留空则关闭人机验证
+    googleVerify: "",     // 只填自己的验证码
+    turnstileSiteKey: "", // 留空 = 关闭人机验证
     turnstileSecretKey: "",
 };
 ```
 
-> 修改 `turnstileSiteKey` / `turnstileSecretKey` 属于敏感信息，建议后续改用 `wrangler secret put` 注入，不要写死在代码里。
+> `turnstileSiteKey` / `turnstileSecretKey` 属于敏感信息，建议改用 `wrangler secret put` 注入，不要写死在代码里。注意：**不要保留 `0x4AAAAAA...` 这类占位符**，它会被误判为「已开启」而导致登录页异常。
 
 ---
 
