@@ -1187,7 +1187,7 @@ export default {
                                 <span class="field-hint">同时用作首页横幅与登录页背景。</span>
                             </div>
                             <div class="field">
-                                <label class="field-label" for="s-favicon">Favicon URL</label>
+                                <label class="field-label" for="s-favicon">网站图标 URL</label>
                                 <input id="s-favicon" class="input" value="${val('favicon')}" placeholder="https://…/favicon.webp">
                             </div>
                             <div class="field">
